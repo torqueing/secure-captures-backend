@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend tests and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lambda-zips
+          path: backend/dist/*.zip
+          retention-days: 7
+
+  terraform:
+    name: Terraform checks
+    runs-on: ubuntu-latest
+    needs: backend
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v5
+      # validate reads the Lambda zips to hash them.
+      - uses: actions/download-artifact@v4
+        with:
+          name: lambda-zips
+          path: backend/dist
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.5
+      - run: terraform fmt -recursive -check -diff
+      - name: Validate each root
+        run: |
+          for dir in bootstrap envs/dev envs/prod; do
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
+      - uses: terraform-linters/setup-tflint@v4
+      - run: tflint --init && tflint --recursive --config "$PWD/.tflint.hcl"
+      - name: Checkov
+        run: |
+          pip install --quiet checkov
+          checkov -d . --config-file .checkov.yaml --compact
+
+  plan-dev:
+    name: Plan dev
+    runs-on: ubuntu-latest
+    needs: terraform
+    # Runs once the AWS roles from infra/bootstrap are configured as repository variables.
+    if: github.event_name == 'pull_request' && vars.AWS_PLAN_ROLE_ARN != ''
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: lambda-zips
+          path: backend/dist
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: eu-west-2
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+      - name: Plan
+        working-directory: infra/envs/dev
+        run: |
+          terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          terraform plan -input=false -lock=true -no-color \
+            -var "app_version=${{ github.sha }}" \
+            -var "alarm_email=${{ vars.ALARM_EMAIL }}" | tee plan.txt
+          { echo '## Terraform plan (dev)'; echo '```'; tail -n 80 plan.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
