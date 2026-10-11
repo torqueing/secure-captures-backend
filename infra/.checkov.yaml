@@ -1,0 +1,31 @@
+# Checkov runs on every pull request. These checks are skipped on purpose:
+framework:
+  - terraform
+skip-check:
+  # Lambda code signing: bundles are built and deployed only by CI from this repository.
+  - CKV_AWS_272
+  # Lambda in a VPC: the functions only call AWS APIs; a VPC adds NAT cost and no protection here.
+  - CKV_AWS_117
+  # Lambda dead-letter queue: these functions are invoked synchronously (API Gateway, Cognito),
+  # where a DLQ never receives anything. The async verifier gets an SQS DLQ in milestone 2.
+  - CKV_AWS_116
+  # Reserved concurrency: new accounts have a concurrency quota of 10, which reservations would exhaust.
+  - CKV_AWS_115
+  # Cross-region replication: v1 keeps all data in eu-west-2 by design (spec: out of scope).
+  - CKV_AWS_144
+  # Event notifications on every bucket: only incoming needs one (verifier, milestone 2).
+  - CKV2_AWS_62
+  # Log retention of a year: dev keeps 30 days by design; prod sets 365.
+  - CKV_AWS_338
+  # The health check is public by design; every other route uses the Cognito JWT authoriser.
+  - CKV_AWS_309
+  # Versioning on incoming (objects live for a day) and logs: versions would only add cost.
+  - CKV_AWS_21
+  # KMS on the logs and state buckets: S3 access log delivery only supports SSE-S3, and the
+  # state bucket uses SSE-S3 so it can exist before any KMS key.
+  - CKV_AWS_145
+  # Access logging on the state bucket: it would need its own log bucket outside any environment.
+  - CKV_AWS_18
+  # AdministratorAccess on the apply role: it creates IAM roles and KMS keys. Only jobs in the
+  # repository's protected dev/prod GitHub environments can assume it.
+  - CKV_AWS_274

@@ -1,0 +1,57 @@
+name: Deploy
+
+# main deploys to dev automatically. prod is deployed by hand from the Actions tab and waits
+# for approval if the repository's "prod" environment has required reviewers.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment || 'dev' }}
+    runs-on: ubuntu-latest
+    # Does nothing until the AWS roles from infra/bootstrap are set as repository variables.
+    if: vars.AWS_APPLY_ROLE_ARN != ''
+    environment: ${{ inputs.environment || 'dev' }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TARGET: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Build Lambda bundles
+        working-directory: backend
+        run: npm ci && npm test && npm run build
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: eu-west-2
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+      - name: Apply
+        working-directory: infra/envs/${{ env.TARGET }}
+        run: |
+          terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          terraform apply -input=false -auto-approve \
+            -var "app_version=${{ github.sha }}" \
+            -var "alarm_email=${{ vars.ALARM_EMAIL }}"
+          terraform output
