@@ -21,8 +21,6 @@ jobs:
   deploy:
     name: Deploy ${{ inputs.environment || 'dev' }}
     runs-on: ubuntu-latest
-    # Does nothing until the AWS roles from infra/bootstrap are set as repository variables.
-    if: vars.AWS_APPLY_ROLE_ARN != ''
     environment: ${{ inputs.environment || 'dev' }}
     permissions:
       contents: read
@@ -30,6 +28,18 @@ jobs:
     env:
       TARGET: ${{ inputs.environment || 'dev' }}
     steps:
+      - name: Check repository variables
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          AWS_APPLY_ROLE_ARN: ${{ vars.AWS_APPLY_ROLE_ARN }}
+        run: |
+          missing=""
+          [ -n "$TF_STATE_BUCKET" ] || missing="$missing TF_STATE_BUCKET"
+          [ -n "$AWS_APPLY_ROLE_ARN" ] || missing="$missing AWS_APPLY_ROLE_ARN"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing variables:$missing. Add them as Repository variables (Settings > Secrets and variables > Actions > Variables tab), not as secrets. Their values are the outputs of infra/bootstrap."
+            exit 1
+          fi
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
