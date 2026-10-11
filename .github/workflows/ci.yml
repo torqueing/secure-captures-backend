@@ -69,30 +69,48 @@ jobs:
     name: Plan dev
     runs-on: ubuntu-latest
     needs: terraform
-    # Runs once the AWS roles from infra/bootstrap are configured as repository variables.
-    if: github.event_name == 'pull_request' && vars.AWS_PLAN_ROLE_ARN != ''
+    if: github.event_name == 'pull_request'
     permissions:
       contents: read
       id-token: write
+    env:
+      PLAN_ROLE: ${{ vars.PLAN_ROLE_ARN || secrets.PLAN_ROLE_ARN }}
+      STATE_BUCKET: ${{ vars.STATE_BUCKET || secrets.STATE_BUCKET }}
+      ALARM_EMAIL: ${{ vars.ALARM_EMAIL || secrets.ALARM_EMAIL }}
     steps:
+      # Plans only once the AWS roles from infra/bootstrap are configured (as variables or secrets).
+      - name: Check plan settings
+        id: settings
+        run: |
+          if [ -n "$PLAN_ROLE" ] && [ -n "$STATE_BUCKET" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Skipping the dev plan: PLAN_ROLE_ARN or STATE_BUCKET is not set."
+          fi
       - uses: actions/checkout@v5
+        if: steps.settings.outputs.ready == 'true'
       - uses: actions/download-artifact@v4
+        if: steps.settings.outputs.ready == 'true'
         with:
           name: lambda-zips
           path: backend/dist
       - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.settings.outputs.ready == 'true'
         with:
-          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          role-to-assume: ${{ env.PLAN_ROLE }}
           aws-region: eu-west-2
       - uses: hashicorp/setup-terraform@v3
+        if: steps.settings.outputs.ready == 'true'
         with:
           terraform_version: 1.16.5
           terraform_wrapper: false
       - name: Plan
+        if: steps.settings.outputs.ready == 'true'
         working-directory: infra/envs/dev
         run: |
-          terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          set -o pipefail
+          terraform init -input=false -backend-config="bucket=$STATE_BUCKET"
           terraform plan -input=false -lock=true -no-color \
             -var "app_version=${{ github.sha }}" \
-            -var "alarm_email=${{ vars.ALARM_EMAIL }}" | tee plan.txt
+            -var "alarm_email=$ALARM_EMAIL" | tee plan.txt
           { echo '## Terraform plan (dev)'; echo '```'; tail -n 80 plan.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
