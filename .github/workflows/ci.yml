@@ -74,8 +74,8 @@ jobs:
       contents: read
       id-token: write
     env:
-      PLAN_ROLE: ${{ vars.AWS_PLAN_ROLE_ARN || secrets.AWS_PLAN_ROLE_ARN }}
-      STATE_BUCKET: ${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}
+      PLAN_ROLE: ${{ vars.PLAN_ROLE_ARN || secrets.PLAN_ROLE_ARN }}
+      STATE_BUCKET: ${{ vars.STATE_BUCKET || secrets.STATE_BUCKET }}
       ALARM_EMAIL: ${{ vars.ALARM_EMAIL || secrets.ALARM_EMAIL }}
     steps:
       # Plans only once the AWS roles from infra/bootstrap are configured (as variables or secrets).
@@ -85,7 +85,7 @@ jobs:
           if [ -n "$PLAN_ROLE" ] && [ -n "$STATE_BUCKET" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::Skipping the dev plan: AWS_PLAN_ROLE_ARN or TF_STATE_BUCKET is not set."
+            echo "::notice::Skipping the dev plan: PLAN_ROLE_ARN or STATE_BUCKET is not set."
           fi
       - uses: actions/checkout@v5
         if: steps.settings.outputs.ready == 'true'

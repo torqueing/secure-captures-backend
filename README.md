@@ -47,9 +47,9 @@ target account (for example `aws sso login`).
 
    | Variable | Value |
    | --- | --- |
-   | `TF_STATE_BUCKET` | `state_bucket` output |
-   | `AWS_PLAN_ROLE_ARN` | `plan_role_arn` output |
-   | `AWS_APPLY_ROLE_ARN` | `apply_role_arn` output |
+   | `STATE_BUCKET` | `state_bucket` output |
+   | `PLAN_ROLE_ARN` | `plan_role_arn` output |
+   | `APPLY_ROLE_ARN` | `apply_role_arn` output |
    | `ALARM_EMAIL` | address that should receive alarms |
 
 3. Under **Settings > Environments**, create `dev` and `prod`. Give `prod` yourself as a

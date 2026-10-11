@@ -30,12 +30,12 @@ jobs:
     steps:
       - name: Check deploy settings
         env:
-          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}
-          AWS_APPLY_ROLE_ARN: ${{ vars.AWS_APPLY_ROLE_ARN || secrets.AWS_APPLY_ROLE_ARN }}
+          STATE_BUCKET: ${{ vars.STATE_BUCKET || secrets.STATE_BUCKET }}
+          APPLY_ROLE_ARN: ${{ vars.APPLY_ROLE_ARN || secrets.APPLY_ROLE_ARN }}
         run: |
           missing=""
-          [ -n "$TF_STATE_BUCKET" ] || missing="$missing TF_STATE_BUCKET"
-          [ -n "$AWS_APPLY_ROLE_ARN" ] || missing="$missing AWS_APPLY_ROLE_ARN"
+          [ -n "$STATE_BUCKET" ] || missing="$missing STATE_BUCKET"
+          [ -n "$APPLY_ROLE_ARN" ] || missing="$missing APPLY_ROLE_ARN"
           if [ -n "$missing" ]; then
             echo "::error::Missing:$missing. Add each one under Settings > Secrets and variables > Actions, as a repository variable or a repository secret. Their values are the outputs of infra/bootstrap."
             exit 1
@@ -51,7 +51,7 @@ jobs:
         run: npm ci && npm test && npm run build
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN || secrets.AWS_APPLY_ROLE_ARN }}
+          role-to-assume: ${{ vars.APPLY_ROLE_ARN || secrets.APPLY_ROLE_ARN }}
           aws-region: eu-west-2
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -60,7 +60,7 @@ jobs:
       - name: Apply
         working-directory: infra/envs/${{ env.TARGET }}
         run: |
-          terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}"
+          terraform init -input=false -backend-config="bucket=${{ vars.STATE_BUCKET || secrets.STATE_BUCKET }}"
           terraform apply -input=false -auto-approve \
             -var "app_version=${{ github.sha }}" \
             -var "alarm_email=${{ vars.ALARM_EMAIL || secrets.ALARM_EMAIL }}"
