@@ -27,7 +27,13 @@ data "aws_caller_identity" "current" {}
 
 locals {
   account_id = data.aws_caller_identity.current.account_id
-  repo       = "repo:${var.github_repository}"
+
+  # GitHub OIDC subjects name the repository either as "owner/name" or, for newer repositories,
+  # with immutable IDs as "owner@ownerId/name@repoId". Trust both spellings.
+  repo_subjects = [
+    "repo:${var.github_owner}/${var.github_repository}",
+    "repo:${var.github_owner}@${var.github_owner_id}/${var.github_repository}@${var.github_repository_id}",
+  ]
 }
 
 resource "aws_s3_bucket" "state" {
@@ -131,7 +137,7 @@ data "aws_iam_policy_document" "trust_plan" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${local.repo}:*"]
+      values   = [for subject in local.repo_subjects : "${subject}:*"]
     }
   }
 }
@@ -152,7 +158,9 @@ data "aws_iam_policy_document" "trust_apply" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${local.repo}:environment:dev", "${local.repo}:environment:prod"]
+      values = flatten([
+        for subject in local.repo_subjects : ["${subject}:environment:dev", "${subject}:environment:prod"]
+      ])
     }
   }
 }

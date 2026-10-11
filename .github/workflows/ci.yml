@@ -94,16 +94,6 @@ jobs:
         with:
           name: lambda-zips
           path: backend/dist
-      # Shows what AWS will compare against the plan role's trust policy (no secrets printed).
-      - name: Show OIDC identity
-        if: steps.settings.outputs.ready == 'true'
-        run: |
-          token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
-          payload=$(echo "$token" | cut -d. -f2 | tr '_-' '/+')
-          while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="$payload="; done
-          claims=$(echo "$payload" | base64 -d | jq -c '{sub, aud, iss}')
-          role=$(echo "$PLAN_ROLE" | sed -E 's/^arn:aws:iam::[0-9]{12}:role\///')
-          echo "::notice title=OIDC identity::claims=$claims role=$role length=${#PLAN_ROLE}"
       - uses: aws-actions/configure-aws-credentials@v4
         if: steps.settings.outputs.ready == 'true'
         with:
