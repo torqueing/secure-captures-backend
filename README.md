@@ -42,8 +42,8 @@ target account (for example `aws sso login`).
 
    Note the outputs `state_bucket`, `plan_role_arn` and `apply_role_arn`.
 
-2. In this repository on GitHub, open **Settings > Secrets and variables > Actions > Variables**
-   and add:
+2. In this repository on GitHub, open **Settings > Secrets and variables > Actions** and add
+   these as repository variables (the **Variables** tab) or repository secrets; either works:
 
    | Variable | Value |
    | --- | --- |
